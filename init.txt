@@ -1,0 +1,159 @@
+------------------------------<강화학습 방법>----------------------------------------
+# 파일 주소
+\\wsl.localhost\Ubuntu\home\ubuntu\checkjin
+
+------<설치 방법>------
+# 시스템 설치 대신, 내 로컬에 pip 부트스트랩
+python3 -m ensurepip --upgrade           # 없으면: sudo apt install python3-venv 먼저 필요
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# (WSL 성능을 위해 /mnt/c 대신 리눅스 홈에서 작업 권장)
+mkdir -p ~/checkjin && cp -r /mnt/c/Users/win/Desktop/checkjin/* ~/checkjin/
+cd ~/checkjin
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+
+------<재접속 방법>------
+
+# 가상환경 활성화 + 프로젝트 폴더 이동
+source ~/checkjin/.venv311/bin/activate
+cd ~/checkjin/mpcrl-greenhouse
+
+# 실행
+python q_learning_greenhouse.py   # 또는 python train_ddpg.py
+
+# 끝내고 싶을때.
+deactivate
+
+# 확인용
+which python     # ~/.venv 안쪽 경로가 나오면 OK
+python -V
+pip list
+
+------<python downgrade 방법>------
+
+# 3.11 설치(우분투 24.04):
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv
+
+# 새 venv
+cd ~/checkjin
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -r mpcrl-greenhouse/requirements.txt
+
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv python3.11-dev
+
+python3.11 --version
+python3.11 -m venv ~/checkjin/.venv311
+source ~/checkjin/.venv311/bin/activate
+pip install -r ~/checkjin/mpcrl-greenhouse/requirements.txt
+
+------<q_learning_greenhouse.py 설정>------
+
+# 파일의 상단부에 추가
+import warnings
+from mpcrl.core.errors import MpcSolverWarning
+warnings.simplefilter("error", MpcSolverWarning)
+
+# 혹시 몰라서 설정
+cd ~/checkjin/mpcrl-greenhouse
+cat > ipopt.opt <<'EOF'
+# 안전 옵션 세트 (WSL/기본 CasADi 빌드 호환)
+print_level 0
+linear_solver mumps
+hessian_approximation limited-memory
+tol 1e-6
+# 문제가 계속되면 아래처럼 디버깅을 잠깐 켜봐도 됨:
+# print_level 5
+EOF
+
+# 가상환경에 설정
+(.venv311) ubuntu@PC:~/checkjin/mpcrl-greenhouse$ source ~/checkjin/.venv311/bin/activate
+cd ~/checkjin/mpcrl-greenhouse
+# 실행
+python q_learning_greenhouse.py
+
+
+# 레포 내부에서 찾기
+cd ~/checkjin/mpcrl-greenhouse
+grep -RniE "nlpsol\\(|ipopt|linear_solver|max_wall_time|hessian_approximation|warm_start" .
+
+# mpcrl 패키지 내부에서 찾기 (설치 위치 확인)
+python - <<'PY'
+import mpcrl, os
+print(os.path.dirname(mpcrl.__file__))
+PY
+# 출력된 경로로 이동 후 동일 grep
+
+
+# 치환해야 되는 경우를 설정
+cd ~/checkjin/mpcrl-greenhouse
+
+# 안전 치환 (따옴표/공백 변형까지 커버)
+sed -i -E 's/("linear_solver"[[:space:]]*:[[:space:]]*")ma57"/\1mumps"/g' mpcs/learning.py mpcs/sample_based.py mpcs/nominal.py
+
+# 혹시 다른 곳에도 남아있는지 재확인
+grep -RniE 'linear_solver|ma57' mpcs
+
+
+
+
+---<학습중 확인 명령어>---
+# 가상환경 활성화 상태에서
+python q_learning_greenhouse.py | tee run.log
+
+# 학습 관련 키워드가 찍히는지 확인
+grep -iE "update|loss|return|reward|episode .* finished" run.log
+
+
+
+
+
+cd ~/checkjin/mpcrl-greenhouse
+
+# 0) 백업(선택)
+cp mpcs/learning.py mpcs/learning.py.bak
+cp mpcs/sample_based.py mpcs/sample_based.py.bak
+cp mpcs/nominal.py mpcs/nominal.py.bak
+
+# 1) "ipopt": { ... } 블록을 안전 옵션으로 일괄 치환
+perl -0777 -i -pe 's/"ipopt":\s*\{.*?\}/"ipopt": {\n    \"print_level\": 0,\n    \"linear_solver\": \"mumps\",\n    \"hessian_approximation\": \"limited-memory\",\n\n    \"mu_strategy\": \"adaptive\",\n    \"tol\": 1e-5,\n    \"acceptable_tol\": 1e-2,\n    \"acceptable_iter\": 10,\n    \"max_iter\": 2000\n}/s' mpcs/learning.py mpcs/sample_based.py mpcs/nominal.py
+
+# 2) print_time를 0으로 보장(혹시 다르게 되어 있으면 교정)
+sed -i -E 's/"print_time"[[:space:]]*:[[:space:]]*[0-9]+/"print_time": 0/g' mpcs/learning.py mpcs/sample_based.py mpcs/nominal.py
+
+# 3) 적용 확인
+grep -n '"ipopt"' -n mpcs/learning.py mpcs/sample_based.py mpcs/nominal.py
+grep -n '"linear_solver"' -n mpcs/learning.py mpcs/sample_based.py mpcs/nominal.py
+
+
+
+
+cd ~/checkjin/mpcrl-greenhouse
+
+# 원래 한 줄:
+# return None if stats["success"] else stats["return_status"]
+# 를 아래 안전 버전으로 교체 (None/비-dict 대비)
+sed -i -E 's/return None if stats\["success"\] else stats\["return_status"\]/return None if (stats is None or (isinstance(stats, dict) and stats.get("success", False))) else (stats.get("return_status","UpdateFailed") if isinstance(stats, dict) else stats)/' agents/greenhouse_agent.py
+
+
+# 문법만 빠르게 확인
+python -m py_compile agents/greenhouse_agent.py
+
+# 학습 재실행
+source ~/checkjin/.venv311/bin/activate
+python q_learning_greenhouse.py | tee run.log
+
+# 업데이트/에피소드 종료 로그가 찍히는지 확인
+grep -iE "episode .* finished|update|loss|return|reward" run.log
