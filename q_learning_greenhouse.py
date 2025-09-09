@@ -1,4 +1,4 @@
-import os, time, signal
+import os, time, signal # 체크포인트 저장/복구
 import importlib
 import logging
 import pickle
@@ -38,9 +38,66 @@ else:
     from sims.configs.test_80 import Test  # type: ignore
 
     test = Test()
+
+    #체크포인트 저장/복구
+    CKPT_PATH = f"results/{test.test_ID}_ckpt.pkl"   # 예: results/test_80_ckpt.pkl
+    os.makedirs("results", exist_ok=True)
+
     #test.num_episodes = 3       # 에피소드 3개로 축소
     #test.ep_len = 1000          # (옵션) 에피소드 길이 단축
     #test.num_days = 1           # (옵션) 재배일수 단축 → 시뮬 시간도 짧아짐
+
+
+def agent_param_values(agent):
+    """에이전트의 learnable 파라미터 현재 값 사전으로 추출"""
+    out = {}
+    for name, lp in agent.learnable_parameters.items():
+        # lp.value 는 casadi/np 타입일 수 있으니 np.array로 고정
+        out[name] = np.array(lp.value, dtype=float)
+    return out
+
+def load_agent_param_values(agent, values: dict):
+    """저장된 파라미터 값을 에이전트에 주입"""
+    for name, val in values.items():
+        if name in agent.learnable_parameters:
+            agent.learnable_parameters[name].value = np.array(val, dtype=float)
+
+def save_ckpt(ep_idx: int, agent, meta=None):
+    data = {
+        "episode_index": ep_idx,
+        "test_id": test.test_ID,
+        "params": agent_param_values(agent),
+        # 필요시 여기에 seed, np RNG state 등 추가 가능
+        "meta": meta or {"time": time.time()},
+    }
+    with open(CKPT_PATH, "wb") as f:
+        pickle.dump(data, f)
+
+def load_ckpt_if_exists(agent):
+    if not os.path.exists(CKPT_PATH):
+        return None
+    with open(CKPT_PATH, "rb") as f:
+        data = pickle.load(f)
+    if data.get("test_id") != test.test_ID:
+        # 다른 실험 ID의 ckpt면 무시(충돌 방지)
+        return None
+    load_agent_param_values(agent, data.get("params", {}))
+    return data
+
+current_ep_for_sig = -1  # 현재 에피소드 번호를 핸들러가 알 수 있게
+
+def _save_and_exit(signum, frame):
+    try:
+        save_ckpt(current_ep_for_sig, agent, meta={"signal": int(signum), "time": time.time()})
+    finally:
+        os._exit(1)
+
+for sig in (signal.SIGINT, signal.SIGTERM):
+    try:
+        signal.signal(sig, _save_and_exit)
+    except Exception:
+        pass
+
 
 
 
@@ -140,18 +197,51 @@ agent = Evaluate(
     seed=test.seed,
 )
 # evaluate train
-agent.train(
-    env=train_env,
-    episodes=test.num_episodes,
-    seed=test.seed,
-    raises=False,
-    env_reset_options={
-        "initial_day": test.initial_day,
-        "noise_coeff": test.noise_coeff if test.noisy_disturbance else 1.0,
-    }
-    if test.disturbance_type == "single"
-    else {},
-)
+# agent.train(
+#     env=train_env,
+#     episodes=test.num_episodes,
+#     seed=test.seed,
+#     raises=False,
+#     env_reset_options={
+#         "initial_day": test.initial_day,
+#         "noise_coeff": test.noise_coeff if test.noisy_disturbance else 1.0,
+#     }
+#     if test.disturbance_type == "single"
+#     else {},
+# )
+# --- 재개(resume) 시도
+resume_info = load_ckpt_if_exists(agent)
+start_ep = 0
+if resume_info is not None:
+    start_ep = int(resume_info.get("episode_index", -1)) + 1
+    print(f"[CKPT] Resuming from episode {start_ep} with params restored.")
+
+# --- 에피소드 1개씩 학습 + 매 에피소드 저장
+for ep in range(start_ep, test.num_episodes):
+    current_ep_for_sig = ep
+    agent.train(
+        env=train_env,
+        episodes=1,           # ★ 한 번에 1개
+        seed=test.seed,
+        raises=False,
+        env_reset_options={
+            "initial_day": test.initial_day,
+            "noise_coeff": test.noise_coeff if test.noisy_disturbance else 1.0,
+        } if test.disturbance_type == "single" else {},
+    )
+    # 평가(Evaluate)는 이미 frequency=1, eval_immediately=True로 설정되어 있으니 에피소드마다 수행됨
+    # --- 에피소드 끝: 즉시 저장
+    save_ckpt(ep, agent, meta={"after_episode": ep, "time": time.time()})
+    print(f"[CKPT] Saved at episode {ep}")
+
+# 전부 끝났다면 체크포인트는 정리(선택)
+try:
+    if os.path.exists(CKPT_PATH):
+        os.remove(CKPT_PATH)
+        print("[CKPT] Completed. Checkpoint removed.")
+except Exception:
+    pass
+
 
 print(np.mean(agent.solve_times))
 
