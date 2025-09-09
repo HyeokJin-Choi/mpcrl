@@ -15,7 +15,7 @@ MPC: 물리적 모델 기반 예측 제어 → 안정성 보장.
 강화학습: MPC의 모델 파라미터를 학습·보정하여 더 나은 제어 성능 달성.
 
 // q_learning_greenhouse.py
-# 시뮬레이션 환경(LettuceGreenHouse)을 초기화할 때 주어지는 파라미터들이에요. 즉, 실제 상추 재배 과정을 모사하는 “가상 온실 환경”의 조건을 어떻게 설정할지를 지정하는 부분.
+# 시뮬레이션 환경(LettuceGreenHouse)을 초기화할 때 주어지는 파라미터들. 즉, 실제 상추 재배 과정을 모사하는 “가상 온실 환경”의 조건을 어떻게 설정할지를 지정하는 부분.
 LettuceGreenHouse(
     growing_days=test.num_days,              # 상추를 키우는 총 기간 (재배일수, 시뮬레이션 horizon)
     model_type=test.base_model,              # 어떤 물리/수학 모델을 쓸지 (예: euler vs rk4, 단순 모델 vs 정밀 모델)
