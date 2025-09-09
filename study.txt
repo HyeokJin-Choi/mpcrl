@@ -24,4 +24,8 @@ LettuceGreenHouse(
     noisy_disturbance=test.noisy_disturbance,# 교란에 노이즈를 추가할지 여부 (현실성 ↑)
     clip_action_variation=test.clip_action_variation  # 제어 입력 변화량을 제한할지 여부 (안정성 ↑)
 )
+- growing_days=90이면 90일간의 온실 운영을 시뮬레이션.
+- disturbance_profiles_type="weather_based"라면 실제 기상 데이터를 반영.
+- rl_cost에 따라 보상 함수가 달라져서 RL이 학습하는 목표(작물 품질 vs 에너지 절감)가 바뀜.
+- clip_action_variation=True이면 제어 신호가 갑자기 튀지 않게 제한.
 
