@@ -163,3 +163,9 @@ grep -iE "episode .* finished|update|loss|return|reward" run.log
 
 # 버퍼링 줄여서 실행하는 방법
 python -u q_learning_greenhouse.py | tee run.log
+
+
+# 백그라운드에서 실행. (학교에서 자동으로 세션을 종료시키는 경우를 피하기 위해)
+nohup python -u q_learning_greenhouse.py > run.log 2>&1 &
+disown
+
