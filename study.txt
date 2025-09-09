@@ -1,3 +1,5 @@
+// https://github.com/SamuelMallick/mpcrl-greenhouse 를 기반으로 연구를 진행.
+
 // q_learning_greenhouse.py
 # 아래의 코드는 
 eval_env = MonitorEpisodes(
