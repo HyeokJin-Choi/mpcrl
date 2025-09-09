@@ -1,3 +1,7 @@
+# nohup python -u q_learning_greenhouse.py > run.log 2>&1 & 
+# disown
+# 위 두 명령어로 실행시킬 것.
+
 import os, time, signal
 import importlib
 import logging
