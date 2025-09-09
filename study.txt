@@ -1,12 +1,26 @@
 // https://github.com/SamuelMallick/mpcrl-greenhouse 를 기반으로 연구를 진행.
+상추(Lettuce) 재배 온실 환경을 시뮬레이션하면서, 그 안에 **MPC(Model Predictive Control)**와 **강화학습(RL)**을 결합해 제어 성능을 개선하는 연구 코드
+
+*** 환경 모델 ***
+LettuceGreenHouse라는 환경 클래스를 정의해서, 온실 내 상태(온도, 습도, CO₂, 빛 등)와 외부 교란(날씨, 일사량 등)을 모사합니다.
+*** 재배 작물 *** 
+상추 (lettuce).
+온실에서 상추가 자라는 과정을 수학적/물리적 모델로 시뮬레이션.
+하루 단위(num_days)로 성장 과정을 반영.
+*** 제어 목표 ***
+상추가 잘 자랄 수 있는 최적 환경(예: 온도·습도·CO₂ 농도 유지) 유지.
+동시에 에너지 소비(히터, 팬, CO₂ 주입 등) 최소화.
+*** 도입된 기법 ***
+MPC: 물리적 모델 기반 예측 제어 → 안정성 보장.
+강화학습: MPC의 모델 파라미터를 학습·보정하여 더 나은 제어 성능 달성.
 
 // q_learning_greenhouse.py
-# 아래의 코드는 
+# 시뮬레이션 환경(LettuceGreenHouse)을 초기화할 때 주어지는 파라미터들이에요. 즉, 실제 상추 재배 과정을 모사하는 “가상 온실 환경”의 조건을 어떻게 설정할지를 지정하는 부분.
 eval_env = MonitorEpisodes(
     TimeLimit(
         LettuceGreenHouse(
-            growing_days=test.num_days,
-            model_type=test.base_model,
+            growing_days=test.num_days, # 한 번의 시뮬레이션에서 상추를 키우는 총 재배일수를 설정: 온실 환경에서 상추가 생장하는 기간을 며칠로 가정할지.
+            model_type=test.base_model, 
             cost_parameters_dict=test.rl_cost,
             disturbance_profiles_type=test.disturbance_type,
             noisy_disturbance=test.noisy_disturbance,
