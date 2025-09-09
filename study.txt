@@ -1,0 +1,15 @@
+// q_learning_greenhouse.py
+# 아래의 코드는 
+eval_env = MonitorEpisodes(
+    TimeLimit(
+        LettuceGreenHouse(
+            growing_days=test.num_days,
+            model_type=test.base_model,
+            cost_parameters_dict=test.rl_cost,
+            disturbance_profiles_type=test.disturbance_type,
+            noisy_disturbance=test.noisy_disturbance,
+            clip_action_variation=test.clip_action_variation,
+        ),
+        max_episode_steps=int(episode_len),
+    )
+)
