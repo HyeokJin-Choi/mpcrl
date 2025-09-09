@@ -2,6 +2,10 @@
 # disown
 # 위 두 명령어로 실행시킬 것.
 
+# ps -ef | grep q_learning_greenhouse.py 프로세스 확인
+# tail -f run.log 로그 파일 모니터링
+# top -p 13719 CPU/RAM 사용 확인, 숫자는 배정된 PID 번호를 사용할 것.
+
 import os, time, signal
 import importlib
 import logging
