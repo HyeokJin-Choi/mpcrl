@@ -16,16 +16,12 @@ MPC: 물리적 모델 기반 예측 제어 → 안정성 보장.
 
 // q_learning_greenhouse.py
 # 시뮬레이션 환경(LettuceGreenHouse)을 초기화할 때 주어지는 파라미터들이에요. 즉, 실제 상추 재배 과정을 모사하는 “가상 온실 환경”의 조건을 어떻게 설정할지를 지정하는 부분.
-eval_env = MonitorEpisodes(
-    TimeLimit(
-        LettuceGreenHouse(
-            growing_days=test.num_days, # 한 번의 시뮬레이션에서 상추를 키우는 총 재배일수를 설정: 온실 환경에서 상추가 생장하는 기간을 며칠로 가정할지.
-            model_type=test.base_model, 
-            cost_parameters_dict=test.rl_cost,
-            disturbance_profiles_type=test.disturbance_type,
-            noisy_disturbance=test.noisy_disturbance,
-            clip_action_variation=test.clip_action_variation,
-        ),
-        max_episode_steps=int(episode_len),
-    )
+LettuceGreenHouse(
+    growing_days=test.num_days,              # 상추를 키우는 총 기간 (재배일수, 시뮬레이션 horizon)
+    model_type=test.base_model,              # 어떤 물리/수학 모델을 쓸지 (예: euler vs rk4, 단순 모델 vs 정밀 모델)
+    cost_parameters_dict=test.rl_cost,       # 제어 비용/보상 함수 파라미터 (에너지 소비, 작물 성장 효율 등 가중치)
+    disturbance_profiles_type=test.disturbance_type,  # 외부 교란(날씨 패턴) 시나리오 선택
+    noisy_disturbance=test.noisy_disturbance,# 교란에 노이즈를 추가할지 여부 (현실성 ↑)
+    clip_action_variation=test.clip_action_variation  # 제어 입력 변화량을 제한할지 여부 (안정성 ↑)
 )
+
