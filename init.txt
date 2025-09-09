@@ -158,3 +158,8 @@ python q_learning_greenhouse.py | tee run.log
 
 # 업데이트/에피소드 종료 로그가 찍히는지 확인
 grep -iE "episode .* finished|update|loss|return|reward" run.log
+
+
+
+# 버퍼링 줄여서 실행하는 방법
+python -u q_learning_greenhouse.py | tee run.log
