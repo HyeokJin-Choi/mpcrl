@@ -1,5 +1,5 @@
-# nohup python -u q_learning_greenhouse.py > run.log 2>&1 & 
-# disown
+nohup python -u q_learning_greenhouse.py > run.log 2>&1 & 
+disown
 # 위 두 명령어로 실행시킬 것.
 
 # ps -ef | grep q_learning_greenhouse.py 프로세스 확인
