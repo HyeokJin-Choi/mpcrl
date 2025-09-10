@@ -14,7 +14,7 @@ class Test(DefaultTest):
     test_ID = "test_80"
     num_days = 40 # 40일, 상추는 40일 이후에 수확하기 때문
     ep_len = num_days * 24 * 4  # 'x' days of 15 minute timesteps = 40일 * 24시간 * 15분당 1회 ※ 3840이 time으로 계산(step)
-    num_episodes = 100 # episode는 100번
+    num_episodes = 100 # episode는 100번, 에피소드 1번은 상추를 씨앗부터 수확까지 키우는 전체 과정을 시뮬레이션
     disturbance_type: Literal["multiple", "single"] = "single"
     noisy_disturbance = True
     noise_coeff = 1.0  # scales the noise generation
