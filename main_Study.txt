@@ -55,6 +55,11 @@ ex)
 
 
 *** visualization.py ***
+# 시각화 실행 명령어
+python visualization.py results/test_80_eval_final.pkl
+# 또는
+python visualization.py results/test_80_train.pkl
+
 # 아래의 코드의 결과로 얻는 파일을 순서로 설명하자면.
 for i, fig in enumerate(plt.get_fignums()):
     plt.figure(fig)
