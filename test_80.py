@@ -9,6 +9,7 @@ from sims.configs.default import DefaultTest
 
 
 # This is 76 but with noisy disturbances
+# “상추를 100번 키우면서” RL 에이전트가 점점 더 똑똑해지는 과정
 class Test(DefaultTest):
     # simulation and training params
     test_ID = "test_80"
