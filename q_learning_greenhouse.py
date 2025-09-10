@@ -39,6 +39,8 @@ else:
     from sims.configs.test_80 import Test  # type: ignore
     test = Test()
 
+# test_80.py 파일의 내용을 확인할 것.
+
 # 1) 공통 경로/디렉터리
 os.makedirs("results", exist_ok=True)
 CKPT_PATH = f"results/{test.test_ID}_ckpt.pkl"   # 예: results/test_80_ckpt.pkl
