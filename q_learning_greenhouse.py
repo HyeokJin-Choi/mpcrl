@@ -6,6 +6,8 @@
 # tail -f run.log 로그 파일 모니터링
 # top -p 13719 CPU/RAM 사용 확인, 숫자는 배정된 PID 번호를 사용할 것.
 
+# grep "\[CKPT\] Saved at episode" -n run.log | tail 지금 몇 에피소드까지 끝났는지 확인
+
 import os, time, signal
 import importlib
 import logging
