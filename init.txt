@@ -2,7 +2,6 @@
 ------------------------------<강화학습 방법>----------------------------------------
 # 파일 주소
 \\wsl.localhost\Ubuntu\home\ubuntu\checkjin
-
 ------<설치 방법>------
 # 시스템 설치 대신, 내 로컬에 pip 부트스트랩
 python3 -m ensurepip --upgrade           # 없으면: sudo apt install python3-venv 먼저 필요
