@@ -409,6 +409,7 @@ class MpcRunner:
         # 비용/가중치/말기비용 (θ에 있으면 shape 맞춰 주입)
         def put_vec(name, length, to="ny"):
             # to: "ny"→(4,1), "nu"→(3,1) 같은 힌트 용도(선택)
+            print(f"[DBG] put_vec {name} -> raw {self.theta.get(name)}")
             if name not in self.theta:
                 return
             v = self.theta[name]
