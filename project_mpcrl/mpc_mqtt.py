@@ -13,7 +13,7 @@ import time
 import threading
 import queue
 from typing import Dict, Any, Optional
-
+import numpy as np
 import paho.mqtt.client as mqtt
 
 # === 프로젝트 내부 모듈 (동일 디렉터리에 위치) ===
@@ -75,6 +75,43 @@ cmd_queue: "queue.Queue[Dict[str, float]]" = queue.Queue()
 # =========================
 # ====== 유틸 함수들 =====
 # =========================
+def _mpc_set_any(mpc_obj, name, val):
+    """
+    csnlp/learning.MPC 구현 차이에 따라 파라미터/변수 값을 세팅하는
+    가능한 메서드를 순차적으로 시도한다.
+    성공하면 True, 전부 실패하면 False를 반환.
+    """
+    try_methods = [
+        "set_value",        # 일부 구현
+        "set_par",          # 다른 구현
+        "set_parameter",    # 다른 구현
+        "set_var",          # 변수 세팅용 구현일 수도
+        "assign",           # 드물게 assign 사용
+        "value",            # casadi/optibase 계열일 때 값 주입
+    ]
+
+    for m in try_methods:
+        if hasattr(mpc_obj, m):
+            try:
+                getattr(mpc_obj, m)(name, val)
+                return True
+            except Exception:
+                pass
+
+    # nlp 내부로 우회 시도
+    if hasattr(mpc_obj, "nlp"):
+        nlp = getattr(mpc_obj, "nlp")
+        for m in try_methods:
+            if hasattr(nlp, m):
+                try:
+                    getattr(nlp, m)(name, val)
+                    return True
+                except Exception:
+                    pass
+
+    return False
+
+
 
 def _coerce_float(obj: Any, default: Optional[float] = None) -> Optional[float]:
     try:
@@ -110,10 +147,9 @@ def load_theta_params(path: str = "theta_params.json") -> Dict[str, Any]:
 # ====== MQTT 핸들러 =====
 # =========================
 
-def on_connect(client, userdata, flags, rc):
-    print(f"[MQTT] Connected rc={rc}")
-    # LWT 알림 확인용 (옵션)
-    # 센서 토픽 구독
+# 변경(v5)
+def on_connect(client, userdata, flags, reasonCode, properties=None):
+    print(f"[MQTT] Connected reasonCode={reasonCode}")
     client.subscribe(TOPIC_SENSOR_COMBINED, qos=MQTT_QOS)
     for t in TOPIC_SENSOR_FIELDS.values():
         client.subscribe(t, qos=MQTT_QOS)
@@ -155,30 +191,90 @@ def publish_actuators(client: mqtt.Client, cmd: Dict[str, float]):
         payload = json.dumps({"value": float(val), "ts": ts})
         client.publish(topic, payload=payload, qos=MQTT_QOS, retain=False)
 
+# === Minimal test config stub for LearningMpc ===
+class SimpleTestConfig:
+    """
+    learning.py가 즉시 참조하는 Test 설정의 필수 필드만 가진 더미 객체.
+    """
+    def __init__(self,
+                 discount_factor: float = 0.99,
+                 p_perturb=None,
+                 p_learn=None):
+        self.discount_factor = float(discount_factor)
+        # 학습/고정 파라미터 사전(learning.py에서 바로 수정하므로 dict 여야 함)
+        self.learnable_pars_init = {}
+        self.fixed_pars = {}
+        # 파라미터 섭동/학습 인덱스
+        self.p_perturb = list(p_perturb) if p_perturb is not None else []
+        self.p_learn = list(p_learn) if p_learn is not None else []
+
+
+
+# === Minimal greenhouse env stub for LearningMpc ===
+class SimpleGreenhouseEnv:
+    """
+    LearningMpc가 참조하는 최소 속성만 제공하는 더미 환경.
+    필요한 경우 속성을 추가하세요.
+    """
+    def __init__(self, nx: int, nu: int, ny: int, nd: int, dt: float):
+        # 필수 차원 정보
+        self.nx = nx    # state dimension
+        self.nu = nu    # control/actuator dimension
+        self.ny = ny    # output dimension
+        self.nd = nd    # disturbance dimension
+
+        # 샘플링 주기: learning.py가 ts를 찾으므로 둘 다 제공합니다.
+        self.dt = float(dt)
+        self.ts = float(dt)   # ←★ 핵심: ts 별칭
+
+        # (방어적 기본값) 제약/경계: 넉넉한 범위로 초기화
+        BIG = 1e9
+        self.x_lb = [-BIG] * nx
+        self.x_ub = [ BIG] * nx
+        self.u_lb = [-BIG] * nu
+        self.u_ub = [ BIG] * nu
+        self.y_lb = [-BIG] * ny
+        self.y_ub = [ BIG] * ny
+
+        # (옵션) 이름 정보가 필요할 수도 있어 기본값 부여
+        self.state_names = getattr(self, "state_names", None)
+        self.input_names = getattr(self, "input_names", None)
+        self.output_names = getattr(self, "output_names", None)
+
+
+
 # =========================
 # ====== MPC 실행부  ======
 # =========================
-
 class MpcRunner:
     def __init__(self):
-        print("[MPC] 초기화 시작")
-        # 학습 파라미터 로드
+        print("[MPC] Init start")
         self.theta = load_theta_params("theta_params.json")
 
-        # MPC 인스턴스 생성
-        # 주의: learning.py 의 시그니처에 맞게 인자 조정 필요할 수 있음
+        env_stub = SimpleGreenhouseEnv(
+            nx=len(STATE_KEYS),
+            nu=3,
+            ny=len(STATE_KEYS),
+            nd=len(STATE_KEYS),
+            dt=float(CONTROL_PERIOD_SEC)
+        )
+
+        # ★ Test 설정 더미
+        test_stub = SimpleTestConfig(
+            discount_factor=0.99,
+            p_perturb=[],   # 파라미터 섭동 없음
+            p_learn=[]      # 학습 파라미터 없음(필요시 인덱스 넣으세요)
+        )
+
         self.mpc = LearningMpc(
-            greenhouse_env=None,
-            test=None,
+            greenhouse_env=env_stub,
+            test=test_stub,          # ★ 여기!
             np_random=None,
-            prediction_horizon=6*4,      # 6시간 * 4step/h = 24 step (예시)
+            prediction_horizon=6*4,
             prediction_model="rk4",
             constrain_control_rate=True
         )
 
-        # 파라미터 주입: LearningMpc 가 제공하는 방식에 맞춰 세팅
-        # 여기서는 파라미터 이름 그대로 set_value 형태를 가정합니다.
-        # learning.py에서 self.parameter(...)로 등록한 이름들에 값 바인딩.
         self._apply_theta_to_mpc(self.theta)
         print("[MPC] 초기화 완료")
 
@@ -187,38 +283,92 @@ class MpcRunner:
         theta_params.json 에 있는 파라미터를 MPC에 바인딩.
         - V0, c_u, c_dy, c_y, y_fin, w, olb, oub, p_0..p_N 등
         """
-        # 배열/스칼라 섞여있으므로 안전하게 처리
-        def as1d(name):
-            v = theta.get(name)
+        # 1) 키 전량 시도(알 수 없는 키는 WARN 후 스킵)
+        for name, v in theta.items():
+            ok = _mpc_set_any(self.mpc, name, v)
+            if not ok:
+                print(f"[MPC][WARN] cannot set '{name}' via known APIs; skipped.")
+
+        # 2) 스칼라/배열 혼재 방지용 헬퍼
+        def as1d(key):
+            v = theta.get(key)
             if v is None:
                 return None
-            if isinstance(v, (list, tuple)):
-                return v
-            return [v]
+            return list(v) if isinstance(v, (list, tuple)) else [v]
 
-        # 비용/제약 파라미터
-        for name in ["V0", "c_dy", "c_y", "y_fin"]:
-            v = as1d(name)
+        # 3) 비용/제약 대표 키들 재확인(있을 때만 세팅)
+        for key in ["V0", "c_dy", "c_y", "y_fin", "c_u", "w", "olb", "oub"]:
+            v = as1d(key)
             if v is not None:
-                self.mpc.set_value(name, v)
+                _mpc_set_any(self.mpc, key, v)
 
-        for name in ["c_u", "w", "olb", "oub"]:
-            v = as1d(name)
-            if v is not None:
-                self.mpc.set_value(name, v)
-
-        # 동역학 파라미터 p_0...p_27 (개수는 모델에 따라 다름)
-        # 못 찾으면 그냥 스킵
+        # 4) 동역학 파라미터 p_0, p_1, ... 연속 세팅
         i = 0
         while True:
             key = f"p_{i}"
             if key not in theta:
                 break
-            self.mpc.set_value(key, [theta[key]])
+            _mpc_set_any(self.mpc, key, [theta[key]])
             i += 1
+        # 출력 제약(y_min_k/y_max_k), 외란(d)은 step()에서 매 루프 갱신
+        
+    def _solve_with_formats(self, x):
+        import numpy as np
+        
+        N = self.mpc.prediction_horizon
+        nx = len(STATE_KEYS)
+        nd = len(STATE_KEYS)  # 현재 외란 차원 가정
 
-        # 출력 제약(y_min_k, y_max_k)은 매 스텝 update 예정
-        # 외란 d 도 매 스텝 0 또는 예보치 반영
+        # 1) x_0
+        params = {
+            "x_0": np.asarray(x, dtype=float).reshape(nx, 1)
+        }
+
+        # 2) d (외란) — 일단 0
+        params["d"] = np.zeros((nd, N))
+
+        # 3) 출력 제약 y_min_k / y_max_k (k = 0..N-1)
+        ymin_vec = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], dtype=float).reshape(nx,1)
+        ymax_vec = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], dtype=float).reshape(nx,1)
+        for k in range(N):
+            params[f"y_min_{k}"] = ymin_vec
+            params[f"y_max_{k}"] = ymax_vec
+
+        # 4) 비용/가중치/경계 등 (θ에서 가져오되, 내부 이름과 형식을 맞춰야 함)
+        #   - 지금은 내부 파라미터명이 정확히 뭔지 몰라서 WARN이 납니다.
+        #   - 만약 내부가 'p'라는 벡터로 등록되어 있다면:
+        # params["p"] = np.asarray([theta[f"p_{i}"] for i in range(PDIM)], dtype=float).reshape(-1,1)
+
+        # 5) solve 호출을 "딕셔너리 한 방에"
+        u = self.mpc.solve(params)
+        
+        last_exc = None
+
+        # 후보 입력 포맷들 차례대로 시도
+        candidates = [
+            np.asarray(x, dtype=float).reshape(-1, 1),                        # (nx,1) numpy
+            {"x":  np.asarray(x, dtype=float).reshape(-1, 1)},               # dict 'x'
+            {"x0": np.asarray(x, dtype=float).reshape(-1, 1)},               # dict 'x0'
+        ]
+
+        for i, arg in enumerate(candidates, 1):
+            try:
+                return self.mpc.solve(arg)
+            except Exception as e:
+                last_exc = e  # 가장 최근 예외 저장하고 다음 포맷 시도
+                # 필요하면 어떤 포맷 실패했는지 로그
+                # print(f"[MPC] solve try#{i} failed: {e}")
+
+        # 전부 실패하면 마지막 예외를 포함해서 올림
+        raise RuntimeError(f"solve input formats all failed: {last_exc}")
+
+
+    def _clamp_cmd(self, cmd, lo=0.0, hi=1.0):
+        for k in cmd:
+            v = float(cmd[k])
+            cmd[k] = hi if v > hi else lo if v < lo else v
+        return cmd
+
 
     def step(self, x: list) -> Dict[str, float]:
         """
@@ -231,33 +381,34 @@ class MpcRunner:
         try:
             for k, key in enumerate(STATE_KEYS):
                 ymin, ymax = Y_BOUNDS[key]
-                self.mpc.set_value(f"y_min_{k}", [[ymin] for _ in range(len(STATE_KEYS))])
-                self.mpc.set_value(f"y_max_{k}", [[ymax] for _ in range(len(STATE_KEYS))])
+                _mpc_set_any(self.mpc, f"y_min_{k}", [[ymin] for _ in range(len(STATE_KEYS))])
+                _mpc_set_any(self.mpc, f"y_max_{k}", [[ymax] for _ in range(len(STATE_KEYS))])
         except Exception:
             # learning.py 구성과 다르면 위 구간을 주석 처리하거나 맞게 수정
             pass
 
         # 외란 d (예: 0으로)
         try:
-            self.mpc.set_value("d", [[0.0] * self.mpc.prediction_horizon for _ in range(len(STATE_KEYS))])
+            _mpc_set_any(self.mpc, "d", [[0.0] * self.mpc.prediction_horizon for _ in range(len(STATE_KEYS))])
         except Exception:
             pass
 
         # === 핵심: MPC 최적화 호출 ===
         try:
-            u = self.mpc.solve(x)  # 학습된 파라미터 적용된 최적화
+            u = self._solve_with_formats(x)  # 학습된 파라미터 적용된 최적화
         except Exception as e:
-            print(f"[MPC] solve 실패, 안전모드로 대체: {e}")
+            print("[MPC] Solve failed, fallback policy used:", e)
             u = self._fallback_policy(x)
 
-        # 액추에이터 맵핑 (모델 입력 순서에 맞춰 매핑 수정)
-        # 예시: [heater, humidifier, co2_valve, led] 4채널 가정
+    
+        # step() 마지막
         cmd = {
             "heater":     float(u[0]) if len(u) > 0 else 0.0,
             "humidifier": float(u[1]) if len(u) > 1 else 0.0,
             "co2_valve":  float(u[2]) if len(u) > 2 else 0.0,
             "led":        float(u[3]) if len(u) > 3 else 0.0,
         }
+        cmd = self._clamp_cmd(cmd, lo=0.0, hi=1.0)   # <- 추가
         return cmd
 
     def _fallback_policy(self, x: list) -> list:
@@ -285,7 +436,7 @@ def control_loop(client: mqtt.Client, mpc_runner: MpcRunner):
     while True:
         x = build_state_vector()
         if x is None:
-            print("[Main] 센서값 대기중... (필요 키: {})".format(STATE_KEYS))
+            print("[Main] Waiting sensor values... required keys:", STATE_KEYS)
             time.sleep(1)
             continue
 
@@ -296,7 +447,7 @@ def control_loop(client: mqtt.Client, mpc_runner: MpcRunner):
 
 def main():
     # MQTT 클라이언트 설정
-    client = mqtt.Client(client_id=CLIENT_ID, clean_session=True)
+    client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv5)
     client.will_set("farm/greenhouse/rpi/status", json.dumps({"status": "offline"}), qos=MQTT_QOS, retain=True)
     client.on_connect = on_connect
     client.on_message = on_message
