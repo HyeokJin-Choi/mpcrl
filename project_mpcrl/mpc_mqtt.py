@@ -389,23 +389,23 @@ class MpcRunner:
         nx = ny = nd = 4
         nu = 3
         N  = int(getattr(self.mpc, "prediction_horizon", 24))
-
+    
         P = {}
-
+    
         # 필수
         P["x_0"] = np.asarray(x, float).reshape(nx, 1)
         P["d"]   = np.zeros((nd, N), float)
-
+    
         ymin = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], float).reshape(ny,1)
         ymax = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], float).reshape(ny,1)
         for k in range(N+1):   # y_min_0..y_min_N, y_max_0..y_max_N
             P[f"y_min_{k}"] = ymin
             P[f"y_max_{k}"] = ymax
-
+    
         # 입력 경계
         P["olb"] = np.zeros((nu,1), float)    # 0
         P["oub"] = np.ones((nu,1), float)     # 1
-
+    
         # 비용/가중치/말기비용 (θ에 있으면 shape 맞춰 주입)
         def put_vec(name, length):
             if name in self.theta:
@@ -416,15 +416,15 @@ class MpcRunner:
         put_vec("w", ny)
         put_vec("V0", ny)
         put_vec("y_fin", ny)
-
+    
         # 동역학 파라미터
         i = 0
         while f"p_{i}" in self.theta:
             P[f"p_{i}"] = float(self.theta[f"p_{i}"])
             i += 1
-
+    
         return P
-
+    
     def step(self, x):
         try:
             params = self._build_params_for_solve(x)
@@ -433,7 +433,7 @@ class MpcRunner:
         except Exception as e:
             print(f"[MPC] Solve failed, fallback policy used: {e}")
             u = self._fallback_policy(x)
-
+    
         cmd = {
             "heater":     float(u[0]) if len(u)>0 else 0.0,
             "humidifier": float(u[1]) if len(u)>1 else 0.0,
