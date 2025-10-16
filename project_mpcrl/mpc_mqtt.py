@@ -253,7 +253,7 @@ class MpcRunner:
 
         env_stub = SimpleGreenhouseEnv(
             nx=len(STATE_KEYS),
-            nu=3,
+            nu=4,
             ny=len(STATE_KEYS),
             nd=len(STATE_KEYS),
             dt=float(CONTROL_PERIOD_SEC)
@@ -280,37 +280,41 @@ class MpcRunner:
 
     def _apply_theta_to_mpc(self, theta: Dict[str, Any]):
         """
-        theta_params.json 에 있는 파라미터를 MPC에 바인딩.
-        - V0, c_u, c_dy, c_y, y_fin, w, olb, oub, p_0..p_N 등
+        theta_params.json 에 있는 파라미터를 MPC에 바인딩하기 위한
+        전처리만 수행합니다. (실제 주입은 _build_params_for_solve 에서)
+        초기화 시점에 self.mpc에 직접 set하지 않아 경고 스팸을 방지합니다.
         """
-        # 1) 키 전량 시도(알 수 없는 키는 WARN 후 스킵)
-        for name, v in theta.items():
-            ok = _mpc_set_any(self.mpc, name, v)
-            if not ok:
-                print(f"[MPC][WARN] cannot set '{name}' via known APIs; skipped.")
-
-        # 2) 스칼라/배열 혼재 방지용 헬퍼
         def as1d(key):
             v = theta.get(key)
             if v is None:
                 return None
             return list(v) if isinstance(v, (list, tuple)) else [v]
-
-        # 3) 비용/제약 대표 키들 재확인(있을 때만 세팅)
+    
+        # 필요시 여기서 값의 스케일/형태만 점검하고,
+        # solve 단계에서 사용할 self.theta 그대로 유지합니다.
+        # 예: as1d("c_y"); as1d("c_u"); 등으로 유효성만 미리 확인 가능
         for key in ["V0", "c_dy", "c_y", "y_fin", "c_u", "w", "olb", "oub"]:
-            v = as1d(key)
-            if v is not None:
-                _mpc_set_any(self.mpc, key, v)
-
-        # 4) 동역학 파라미터 p_0, p_1, ... 연속 세팅
+            _ = as1d(key)
+        # p_0 ~ p_N 같은 연속 파라미터도 존재만 확인
         i = 0
         while True:
-            key = f"p_{i}"
-            if key not in theta:
+            k = f"p_{i}"
+            if k not in theta:
                 break
-            _mpc_set_any(self.mpc, key, [theta[key]])
+            _ = theta[k]  # 사용 여부만 확인
             i += 1
-        # 출력 제약(y_min_k/y_max_k), 외란(d)은 step()에서 매 루프 갱신
+
+    def safe_fallback(self, x):
+    # x = [온도, 습도, CO2ppm, 광량] 가정
+    T, RH, CO2, PAR = x
+    cmd = dict(heater=0.0, humidifier=0.0, co2_valve=0.0, led=0.0)
+
+    if T < 18.0: cmd["heater"] = 0.3
+    if RH < 40.0: cmd["humidifier"] = 0.2
+    if CO2 < 450.0: cmd["co2_valve"] = 0.1
+    if PAR < 200.0: cmd["led"] = 0.2
+
+    return cmd
         
     def _solve_with_formats(self, x):
         import numpy as np
@@ -340,7 +344,14 @@ class MpcRunner:
         # params["p"] = np.asarray([theta[f"p_{i}"] for i in range(PDIM)], dtype=float).reshape(-1,1)
 
         # 5) solve 호출을 "딕셔너리 한 방에"
-        u = self.mpc.solve(params)
+        # u = self.mpc.solve(params)
+        try:
+            u = self.mpc.solve(x, params=self._build_params_for_solve(x))
+        except Exception as e:
+            # ❌ 잘못된 예: logger.error("... %s", params)
+            # ✅ 이렇게 바꾸세요:
+            logger.exception("[MPC] Solve failed, using fallback. reason=%s", e)
+            u = self.safe_fallback(x)  # 최소 안전동작
         
         last_exc = None
 
@@ -387,34 +398,20 @@ class MpcRunner:
     def _build_params_for_solve(self, x):
         import numpy as np
         nx = ny = nd = 4
-        nu = 3
+        nu = 4  # 액추에이터 4채널과 일치
         N  = int(getattr(self.mpc, "prediction_horizon", 24))
     
         P = {}
     
-        # 필수
-        P["x_0"] = np.asarray(x, float).reshape(nx, 1)
-        P["d"]   = np.zeros((nd, N), float)
-    
-        ymin = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], float).reshape(ny,1)
-        ymax = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], float).reshape(ny,1)
-        for k in range(N+1):   # y_min_0..y_min_N, y_max_0..y_max_N
-            P[f"y_min_{k}"] = ymin
-            P[f"y_max_{k}"] = ymax
-    
-        # 입력 경계
-        P["olb"] = np.zeros((nu,1), float)    # 0
-        P["oub"] = np.ones((nu,1), float)     # 1
-    
-        # 비용/가중치/말기비용 (θ에 있으면 shape 맞춰 주입)
+        # 가중치/목표/제약 벡터 주입 헬퍼
         def put_vec(name, length, to="ny"):
-            # to: "ny"→(4,1), "nu"→(3,1) 같은 힌트 용도(선택)
+            # to: "ny"→(4,1), "nu"→(4,1) 힌트 용도
             print(f"[DBG] put_vec {name} -> raw {self.theta.get(name)}")
             if name not in self.theta:
                 return
             v = self.theta[name]
             arr = np.asarray(v, dtype=float)
-        
+    
             if arr.ndim == 0:
                 # 스칼라면 length 길이로 복제
                 arr = np.full((length, 1), float(arr))
@@ -423,31 +420,41 @@ class MpcRunner:
                 if arr.shape[0] != length:
                     if arr.shape[0] == 1:
                         # [x] 하나만 있으면 length로 복제
-                        arr = np.full((length, 1), float(arr[0, 0] if arr.ndim == 2 else arr[0]))
+                        scalar = float(arr[0, 0]) if arr.ndim == 2 else float(arr[0])
+                        arr = np.full((length, 1), scalar)
                     else:
                         # 길이가 다르면 안전하게 resize(패딩/자름)
                         arr = np.resize(arr, (length, 1))
-            params[name] = arr
-        
-        put_vec("c_y",   ny)  # (4,1)
-        put_vec("c_dy",  ny)  # (4,1)
-        put_vec("V0",    ny)  # (4,1)
-        put_vec("y_fin", ny)  # (4,1)
-        put_vec("w",     ny)  # (4,1)
-        
-        put_vec("c_u",   nu)  # (3,1)  ← 입력 가중치
-        # olb/oub가 theta에도 있을 수 있으니 있으면 덮어쓰게:
-        put_vec("olb",   nu)  # (3,1)
-        put_vec("oub",   nu)  # (3,1)
-
     
-        # 동역학 파라미터
+            P[name] = arr  # ★ BUGFIX: P에 저장 (이전 'params'로 인한 NameError 수정)
+    
+        # 출력 관련(차원 = ny)
+        put_vec("c_y",   ny)
+        put_vec("c_dy",  ny)
+        put_vec("V0",    ny)
+        put_vec("y_fin", ny)
+        put_vec("w",     ny)
+    
+        # 입력 관련(차원 = nu = 4)
+        put_vec("c_u",   nu)
+        put_vec("olb",   nu)
+        put_vec("oub",   nu)
+    
+        # 필요 시 동역학 p_0..p_k 묶어서 넘길 수도 있음
+        # 예: self.theta에 p_0..p_27 있으면 벡터화
+        p_list = []
         i = 0
-        while f"p_{i}" in self.theta:
-            P[f"p_{i}"] = float(self.theta[f"p_{i}"])
+        while True:
+            key = f"p_{i}"
+            if key not in self.theta:
+                break
+            p_list.append(float(self.theta[key]))
             i += 1
+        if p_list:
+            P["p"] = np.asarray(p_list, dtype=float).reshape(-1, 1)
     
         return P
+
     
     def step(self, x):
         try:
@@ -491,7 +498,11 @@ def control_loop(client: mqtt.Client, mpc_runner: MpcRunner):
 
 def main():
     # MQTT 클라이언트 설정
-    client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv5)
+    client = mqtt.Client(
+        client_id=CLIENT_ID,
+        protocol=mqtt.MQTTv5,
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2  # v1 폐기 경고 제거
+    )
     client.will_set("farm/greenhouse/rpi/status", json.dumps({"status": "offline"}), qos=MQTT_QOS, retain=True)
     client.on_connect = on_connect
     client.on_message = on_message
