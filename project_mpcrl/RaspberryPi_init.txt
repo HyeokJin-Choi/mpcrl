@@ -88,3 +88,56 @@ cd ~/checkjin/mpcrl-greenhouse
 which python
 python -V
 pip list
+
+
+
+
+mpcrl의 초기화에서 numba를 안 쓰도록 패치 + RL테스트
+source ~/checkjin/.venv311/bin/activate
+
+python - <<'PY'
+import sysconfig, os, re
+
+site = sysconfig.get_paths()['purelib']
+init = os.path.join(site, 'mpcrl', '__init__.py')
+
+with open(init, 'r', encoding='utf-8') as f:
+    src = f.read()
+
+# lstd_dpg를 즉시 임포트하는 줄을 "지연 임포트" 함수로 바꿈
+patched = re.sub(
+    r'^\s*from\s+\.agents\.lstd_dpg\s+import\s+LstdDpgAgent\s*$',
+    "# RPi armv7 workaround: lazy import to avoid numba at import time\n"
+    "# from .agents.lstd_dpg import LstdDpgAgent\n"
+    "def LstdDpgAgent(*args, **kwargs):\n"
+    "    from .agents.lstd_dpg import LstdDpgAgent as _A\n"
+    "    return _A(*args, **kwargs)\n",
+    src,
+    flags=re.M
+)
+
+if patched == src:
+    print("⚠️ 패치할 라인을 못 찾음. 파일 위치/내용을 확인하세요:", init)
+else:
+    with open(init + '.bak', 'w', encoding='utf-8') as f:
+        f.write(src)
+    with open(init, 'w', encoding='utf-8') as f:
+        f.write(patched)
+    print("✅ 패치 완료:", init)
+PY
+
+# import가 통과되는지 확인
+python -c "import mpcrl; print('mpcrl import OK')"
+
+# 바로 실행
+cd ~/checkjin/mpcrl-greenhouse
+
+cat > ipopt.opt <<'EOF'
+print_level 0
+linear_solver mumps
+hessian_approximation limited-memory
+tol 1e-6
+EOF
+
+python -u q_learning_greenhouse.py | tee run.log
+
