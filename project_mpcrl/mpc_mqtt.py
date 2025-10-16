@@ -369,36 +369,6 @@ class MpcRunner:
             cmd[k] = hi if v > hi else lo if v < lo else v
         return cmd
 
-
-    def step(self, x: list) -> Dict[str, float]:
-        """
-        상태 x 로부터 최적 제어 입력 계산.
-        - LearningMpc.solve(...) 의 시그니처에 맞게 호출하세요.
-        - 본 예시는 self.mpc.solve(x) 를 가정.
-        """
-        # 출력 제약 세팅 (예: 온실 출력이 STATE_KEYS 순서와 1:1 매핑일 때)
-        # 실사용시 모델 출력/상태 차원 정의에 맞게 보정 필요
-        try:
-            params = self._build_params_for_solve(x)
-            u = self.mpc.solve(params)        # ★ 딕셔너리 한 방에
-            # u shape에 따라 리스트로 변환
-            u = np.asarray(u).reshape(-1).tolist()
-        except Exception as e:
-            print(f"[MPC] Solve failed, fallback policy used: {e}")
-            u = self._fallback_policy(x)
-
-        # 액추에이터 매핑 + 안전 클램핑(실기 보호용: 남겨두는 걸 권장)
-        cmd = {
-            "heater":     float(u[0]) if len(u) > 0 else 0.0,
-            "humidifier": float(u[1]) if len(u) > 1 else 0.0,
-            "co2_valve":  float(u[2]) if len(u) > 2 else 0.0,
-            "led":        float(u[3]) if len(u) > 3 else 0.0,  # nu=3이므로 보통 0.0
-        }
-        # 하드웨어 보호용 클램핑(내부 제약이 먹어도 안전장치로 유지 권장)
-        for k in cmd:
-            cmd[k] = max(0.0, min(1.0, cmd[k]))
-        return cmd
-
     def _fallback_policy(self, x: list) -> list:
         """MPC 실패 시 간단한 P제어 대체(안전모드). 프로젝트에 맞게 수정."""
         # 목표값(중간치)
@@ -415,65 +385,66 @@ class MpcRunner:
         return u
         
     def _build_params_for_solve(self, x):
-        """
-        csnlp 기반 MPC가 요구하는 파라미터(에러 메시지에 나온 이름들)를
-        한 번에 dict로 만들어 solve(params)로 넘긴다.
-        """
-        nx = len(STATE_KEYS)
-        ny = len(STATE_KEYS)   # 출력=상태 1:1 가정
-        nd = len(STATE_KEYS)
-        N  = int(getattr(self.mpc, "prediction_horizon", 24))  # 이름상 0..N 포함이면 N+1개 필요할 수 있음
-
-        params = {}
-
-        # 0) 초기상태
-        params["x_0"] = np.asarray(x, dtype=float).reshape(nx, 1)
-
-        # 1) 외란 d (일단 0)
-        params["d"] = np.zeros((nd, N), dtype=float)
-
-        # 2) 출력 제약: y_min_k / y_max_k  (에러에 y_min_24, y_max_24가 보여서 N 포함 가능)
-        ymin_vec = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], dtype=float).reshape(ny, 1)
-        ymax_vec = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], dtype=float).reshape(ny, 1)
-        for k in range(N + 1):  # ★ 중요: 0..N 모두 넣기
-            params[f"y_min_{k}"] = ymin_vec
-            params[f"y_max_{k}"] = ymax_vec
-
-        # 3) 입력(액추에이터) 경계가 요구되면 olb/oub 채움 (nu=3 가정: heater, humidifier, co2)
+        import numpy as np
+        nx = ny = nd = 4
         nu = 3
-        params.setdefault("olb", np.zeros((nu, 1), dtype=float))   # 0
-        params.setdefault("oub", np.ones((nu, 1), dtype=float))    # 1
+        N  = int(getattr(self.mpc, "prediction_horizon", 24))
 
-        # 4) 비용/가중치/말기비용 등 (θ에서 있으면 넣고, 없으면 스킵)
-        def put_vec(name, length=None, default=None):
-            v = self.theta.get(name, default)
-            if v is None:
-                return
-            arr = np.asarray(v, dtype=float).reshape(-1, 1)
-            if length is not None and arr.shape[0] != length:
-                # 길이 맞추기 (필요시 잘라내거나 패딩)
-                arr = np.resize(arr, (length, 1))
-            params[name] = arr
+        P = {}
 
-        # 출력/입력 가중치 (길이는 보통 ny/nu)
-        put_vec("c_y", length=ny)
-        put_vec("c_dy", length=ny)
-        put_vec("c_u", length=nu)
-        put_vec("w",   length=ny)      # 모델에 따라 해석 다름
-        put_vec("V0",  length=ny)      # 초기 상태 가중
-        put_vec("y_fin", length=ny)    # 말기 목표/가중
+        # 필수
+        P["x_0"] = np.asarray(x, float).reshape(nx, 1)
+        P["d"]   = np.zeros((nd, N), float)
 
-        # 5) 동역학 파라미터 p_* 세트 (에러에 p_0..p_27가 직접 등장 → 각 키로 채움)
-        #    θ JSON에 p_0..p_27가 있다면 그대로 집어넣기
+        ymin = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], float).reshape(ny,1)
+        ymax = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], float).reshape(ny,1)
+        for k in range(N+1):   # y_min_0..y_min_N, y_max_0..y_max_N
+            P[f"y_min_{k}"] = ymin
+            P[f"y_max_{k}"] = ymax
+
+        # 입력 경계
+        P["olb"] = np.zeros((nu,1), float)    # 0
+        P["oub"] = np.ones((nu,1), float)     # 1
+
+        # 비용/가중치/말기비용 (θ에 있으면 shape 맞춰 주입)
+        def put_vec(name, length):
+            if name in self.theta:
+                P[name] = np.asarray(self.theta[name], float).reshape(length,1)
+        put_vec("c_y", ny)
+        put_vec("c_dy", ny)
+        put_vec("c_u", nu)
+        put_vec("w", ny)
+        put_vec("V0", ny)
+        put_vec("y_fin", ny)
+
+        # 동역학 파라미터
         i = 0
-        while True:
-            key = f"p_{i}"
-            if key not in self.theta:
-                break
-            params[key] = float(self.theta[key])
+        while f"p_{i}" in self.theta:
+            P[f"p_{i}"] = float(self.theta[f"p_{i}"])
             i += 1
 
-        return params
+        return P
+
+    def step(self, x):
+        try:
+            params = self._build_params_for_solve(x)
+            u = self.mpc.solve(params)  # 딕셔너리 한 방에
+            u = np.asarray(u, float).reshape(-1).tolist()
+        except Exception as e:
+            print(f"[MPC] Solve failed, fallback policy used: {e}")
+            u = self._fallback_policy(x)
+
+        cmd = {
+            "heater":     float(u[0]) if len(u)>0 else 0.0,
+            "humidifier": float(u[1]) if len(u)>1 else 0.0,
+            "co2_valve":  float(u[2]) if len(u)>2 else 0.0,
+            "led":        float(u[3]) if len(u)>3 else 0.0,
+        }
+        # 안전용 클램핑(내부 제약이 정상 동작해도 보호용으로 유지 권장)
+        for k in cmd:
+            cmd[k] = 0.0 if cmd[k] < 0.0 else 1.0 if cmd[k] > 1.0 else cmd[k]
+        return cmd
+
 
 # =========================
 # ====== 메인 루프  =======
