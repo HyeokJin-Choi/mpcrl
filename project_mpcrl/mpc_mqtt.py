@@ -305,14 +305,14 @@ class MpcRunner:
             i += 1
 
     def safe_fallback(self, x):
-    # x = [온도, 습도, CO2ppm, 광량] 가정
-    T, RH, CO2, PAR = x
-    cmd = dict(heater=0.0, humidifier=0.0, co2_valve=0.0, led=0.0)
-
-    if T < 18.0: cmd["heater"] = 0.3
-    if RH < 40.0: cmd["humidifier"] = 0.2
-    if CO2 < 450.0: cmd["co2_valve"] = 0.1
-    if PAR < 200.0: cmd["led"] = 0.2
+        # x = [온도, 습도, CO2ppm, 광량] 가정
+        T, RH, CO2, PAR = x
+        cmd = dict(heater=0.0, humidifier=0.0, co2_valve=0.0, led=0.0)
+    
+        if T < 18.0: cmd["heater"] = 0.3
+        if RH < 40.0: cmd["humidifier"] = 0.2
+        if CO2 < 450.0: cmd["co2_valve"] = 0.1
+        if PAR < 200.0: cmd["led"] = 0.2
 
     return cmd
         
