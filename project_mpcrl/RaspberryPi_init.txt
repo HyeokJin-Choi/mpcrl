@@ -172,7 +172,7 @@ pip install "mpcrl==1.2.1rc4"  || pip install --no-deps "mpcrl==1.2.1rc4"
 
 
 (.venv311) rasp@raspberrypi:~/checkjin/mpcrl/project_mpcrl $ python mpc_mqtt.py 
-/home/rasp/checkjin/mpcrl/project_mpcrl/mpc_mqtt.py:499: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+/home/rasp/checkjin/mpcrl/project_mpcrl/mpc_mqtt.py:470: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
   client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv5)
 [MPC] Init start
 [MQTT] Connected reasonCode=Success
@@ -214,8 +214,8 @@ pip install "mpcrl==1.2.1rc4"  || pip install --no-deps "mpcrl==1.2.1rc4"
 [MPC][WARN] cannot set 'p_27' via known APIs; skipped.
 [MPC] 초기화 완료
 [Main] 제어 루프 시작
-[MPC] Solve failed, fallback policy used: .../casadi/core/sx_instantiator.cpp:457: Sparsities of v and vdef must match. Got v: 1x1 and vdef: 4x1.
-[Main] x=[23.67, 53.17, 632.5, 345.3] → cmd={'heater': 0.0, 'humidifier': 1.0, 'co2_valve': 0.875, 'led': 0.0}
-[MPC] Solve failed, fallback policy used: .../casadi/core/sx_instantiator.cpp:457: Sparsities of v and vdef must match. Got v: 1x1 and vdef: 4x1.
-[Main] x=[21.89, 72.23, 486.3, 447.3] → cmd={'heater': 0.0, 'humidifier': 0.0, 'co2_valve': 1.0, 'led': 0.0}
-
+[MPC] Solve failed, fallback policy used: cannot reshape array of size 1 into shape (4,1)
+[Main] x=[19.31, 59.0, 547.1, 551.0] → cmd={'heater': 0.16900000000000015, 'humidifier': 0.6000000000000001, 'co2_valve': 1.0, 'led': 0.0}
+^C
+[Main] 종료 신호 수신
+(.venv311) rasp@raspberrypi:~/checkjin/mpcrl/project_mpcrl $ 
