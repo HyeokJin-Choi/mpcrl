@@ -448,19 +448,44 @@ class MpcRunner:
     
         return P
 
-
-
     
     def step(self, x):
+        import numpy as np
+    
         try:
-            params = self._build_params_for_solve(x)
-            u = self.mpc.solve(params)  # (heater, humidifier, co2_valve) 3채널
+            P = self._build_params_for_solve(x)
+    
+            # ★ 개별 주입으로 어떤 키에서 shape가 깨지는지 잡는다
+            set_errors = []
+            for k, v in P.items():
+                try:
+                    ok = _mpc_set_any(self.mpc, k, v)
+                    if not ok:
+                        # set_value류 메서드가 없거나 거부한 경우
+                        set_errors.append((k, np.asarray(v).shape, "no_setter"))
+                except Exception as e:
+                    set_errors.append((k, np.asarray(v).shape, str(e)))
+    
+            if set_errors:
+                # 어떤 키가 문제인지 바로 로그로 확인
+                print("[SET_ERR] count =", len(set_errors))
+                for k, shp, msg in set_errors[:10]:   # 너무 많으면 앞 10개만
+                    print(f"[SET_ERR] {k}: shape={shp} err={msg}")
+    
+                # 일단 실패했어도 solve에 dict로도 한번 더 넣어보자
+                # (csnlp가 자체 파라미터 입력 루틴을 갖고 있으면 통과할 수도 있음)
+                u = self.mpc.solve(P)
+            else:
+                # 모든 키 set 성공 → solve 호출
+                u = self.mpc.solve(P)
+    
             u = np.asarray(u, float).reshape(-1).tolist()
+    
         except Exception as e:
             print(f"[MPC] Solve failed, fallback policy used: {e}")
-            u = self._fallback_policy(x)  # 길이 3
+            u = self._fallback_policy(x)  # 길이 3 (heater/humidifier/co2)
     
-        # ★ LED는 임시 규칙 기반: PAR(조도) 낮으면 켬
+        # ★ LED는 임시 규칙
         PAR = float(x[3])
         led_cmd = 0.2 if PAR < 200.0 else 0.0
     
@@ -468,11 +493,12 @@ class MpcRunner:
             "heater":     float(u[0]) if len(u)>0 else 0.0,
             "humidifier": float(u[1]) if len(u)>1 else 0.0,
             "co2_valve":  float(u[2]) if len(u)>2 else 0.0,
-            "led":        led_cmd,  # ★ MPC 바깥에서 결정
+            "led":        led_cmd,
         }
         for k in cmd:
             cmd[k] = 0.0 if cmd[k] < 0.0 else 1.0 if cmd[k] > 1.0 else cmd[k]
         return cmd
+
 
 
 
