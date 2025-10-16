@@ -8,6 +8,10 @@
 
 # grep "\[CKPT\] Saved at episode" -n run.log | tail 지금 몇 에피소드까지 끝났는지 확인
 
+# nohup python -u q_learning_greenhouse.py > run.log 2>&1 & 
+# disown
+# 위 두 명령어로 실행시킬 것.
+
 import os, time, signal
 import importlib
 import logging
@@ -29,6 +33,90 @@ from greenhouse.model import Model
 from mpcs.learning import LearningMpc
 from utils.plot import plot_greenhouse
 
+
+# --------------------------------------------------------
+# ---------- Utils: safe array shaping & extraction ----------
+import numpy as np
+
+def squeeze_last_if_one(a):
+    """
+    마지막 축의 크기가 1이면 squeeze. 에피소드별 길이가 다른 ragged 리스트/배열(object dtype)도 안전 처리.
+    """
+    a = np.asarray(a, dtype=object)
+    if a.dtype == object:  # 에피소드 리스트 형태
+        out = []
+        for ep in a:
+            ep_arr = np.asarray(ep)
+            if ep_arr.ndim >= 1 and ep_arr.shape[-1] == 1:
+                ep_arr = np.squeeze(ep_arr, axis=-1)
+            out.append(ep_arr)
+        return np.array(out, dtype=object)
+    # 일반 ndarray
+    if a.ndim >= 1 and a.shape[-1] == 1:
+        return np.squeeze(a, axis=-1)
+    return a
+
+
+def stack_disturbances(env):
+    """
+    MonitorEpisodes 래퍼에 저장된 전체 에피소드의 외란 프로파일을 object 배열로 반환.
+    없으면 빈 object 배열.
+    """
+    try:
+        d = env.get_wrapper_attr('disturbance_profiles_all_episodes')
+    except Exception:
+        d = None
+    if d is None:
+        return np.array([], dtype=object)
+    return np.asarray(d, dtype=object)
+
+
+def build_TD_matrix(td_errors, R_tr, num_episodes):
+    """
+    TD 에러를 에피소드 경계에 맞춰 2D(object->ragged safe)로 재배열.
+    R_tr의 에피소드 길이를 기준으로 잘라낸다.
+    """
+    ep_lens = [len(r) for r in R_tr]
+    flat = np.asarray(td_errors, dtype=float).ravel()
+    total = sum(ep_lens)
+    flat = flat[:total] if total > 0 else flat[:0]
+    if len(ep_lens) > 1 and total > 0:
+        splits = np.cumsum(ep_lens[:-1])
+        per_ep = np.split(flat, splits)
+    elif total > 0:
+        per_ep = [flat]
+    else:
+        per_ep = []
+    # 길이 정규화(최솟값 기준) → 시각화 코드가 stack 가능한 모양을 기대함
+    if not per_ep:
+        return np.empty((0, 0))
+    min_len = min(len(v) for v in per_ep)
+    if min_len == 0:
+        return np.empty((0, 0))
+    return np.stack([v[:min_len] for v in per_ep], axis=0)
+
+def _stack_ragged(obj_arr, target_len=None):
+    """
+    에피소드별 길이가 다른 시퀀스(2D/3D)를 (episodes, T, ...)로 스택합니다.
+    target_len이 주어지면 앞에서부터 그 길이에 맞춰 잘라 스택합니다.
+    """
+    arrs = [np.asarray(ep) for ep in obj_arr]
+    lens = [a.shape[0] for a in arrs] if arrs else [0]
+    if not arrs or min(lens) == 0:
+        return np.empty((0, 0))
+    T = min(lens) if target_len is None else min(target_len, min(lens))
+    return np.stack([a[:T] for a in arrs], axis=0)
+
+# ------------------------------------------------------------
+
+# (선택) 평가 저장 분기에서 NameError 방지용 기본값
+X_ev = None
+U_ev = None
+R_ev = None
+d_ev = None
+
+# --------------------------------------------------------
+
 STORE_DATA = True
 PLOT = True
 
@@ -40,8 +128,6 @@ if len(sys.argv) > 1:
 else:
     from sims.configs.test_80 import Test  # type: ignore
     test = Test()
-
-# test_80.py 파일의 내용을 확인할 것.
 
 # 1) 공통 경로/디렉터리
 os.makedirs("results", exist_ok=True)
@@ -216,88 +302,84 @@ for ep in range(start_ep, test.num_episodes):
     save_ckpt(ep, agent, meta={"after_episode": ep, "time": time.time()})
     print(f"[CKPT] Saved at episode {ep}")
 
-# 모든 에피소드 완료 → ckpt 정리(선택)
-try:
-    if os.path.exists(CKPT_PATH):
-        os.remove(CKPT_PATH)
-        print("[CKPT] Completed. Checkpoint removed.")
-except Exception:
-    pass
+# 모든 에피소드 완료 → ckpt 정리(선택) 2025/09/29 주석처리
+# try:
+#     if os.path.exists(CKPT_PATH):
+#         os.remove(CKPT_PATH)
+#         print("[CKPT] Completed. Checkpoint removed.")
+# except Exception:
+#     pass
 # -----------------------------------------------
 
 print(np.mean(agent.solve_times))
 
 # ---------- 데이터 추출 ----------
-TD = agent.td_errors
-TD = np.asarray(TD).reshape(test.num_episodes, -1)
 
+# Train 데이터 (먼저 꺼내서 에피소드별 원시 시퀀스 확보: ragged/object)
+X_tr = np.asarray(train_env.observations, dtype=object)   # 각 ep: (T_x_plus1, nx)
+U_tr = squeeze_last_if_one(train_env.actions)             # 각 ep: (T_u, nu)
+R_tr = np.asarray(train_env.rewards, dtype=object)        # 각 ep: (T_r,)
+d_tr = stack_disturbances(train_env)                      # 각 ep: (T_d, nd)
+
+# TD를 에피소드 경계 기준으로 안전하게 재구성
+TD = build_TD_matrix(agent.td_errors, R_tr, test.num_episodes)
+
+# 파라미터 업데이트 히스토리 reshape도 안전하게 (에피소드 경계 기준)
 param_dict = {}
 for key, val in agent.updates_history.items():
-    temp = [val[0]] * test.skip_first  # 처음 skip_first 만큼 첫 값 반복
-    val = [*temp, *val[1:]]           # index 1부터는 업데이트 반영
-    param_dict[key] = np.asarray(val).reshape(test.num_episodes, -1)
+    temp = [val[0]] * test.skip_first
+    val = [*temp, *val[1:]]
+    flat = np.asarray(val, dtype=float).ravel()
+    ep_lens = [len(r) for r in R_tr]
+    total = sum(ep_lens)
+    flat = flat[:total]
+    if len(ep_lens) > 1:
+        splits = np.cumsum(ep_lens[:-1])
+        per_ep = np.split(flat, splits)
+    else:
+        per_ep = [flat]
+    min_len = min(len(v) for v in per_ep) if per_ep else 0
+    if min_len == 0:
+        param_dict[key] = np.empty((0, 0))
+    else:
+        param_dict[key] = np.stack([v[:min_len] for v in per_ep], axis=0)
 
-def squeeze_last_if_one(a):
-    a = np.asarray(a)
-    if a.ndim >= 1 and a.shape[-1] == 1:
-        return np.squeeze(a, axis=-1)
-    return a
+# ---------- 길이 정렬 & 3D 스택 ----------
+# 각 시퀀스의 최소 길이 계산
+Tx = min(len(np.asarray(ep)) for ep in X_tr) if len(X_tr) else 0      # 상태 길이 (T_x_plus1)
+Tu = min(len(np.asarray(ep)) for ep in U_tr) if len(U_tr) else 0      # 입력 길이 (T_u)
+Tr = min(len(np.asarray(ep)) for ep in R_tr) if len(R_tr) else 0      # 보상 길이 (T_r)
+Td = min(len(np.asarray(ep)) for ep in d_tr) if len(d_tr) else 0      # 외란 길이 (T_d)
 
-def stack_disturbances(env):
-    d = env.get_wrapper_attr('disturbance_profiles_all_episodes')
-    # 빈 데이터 방어
-    if d is None or (isinstance(d, list) and len(d) == 0):
-        return np.empty((0, 0, 0))
-    if isinstance(d, list):
-        arrs = []
-        for a in d:
-            a = np.asarray(a)
-            if a.ndim == 1:
-                a = a[:, None]           # (steps,) -> (steps,1)
-            # (features, steps) 형태면 (steps, features)로
-            if a.ndim == 2 and a.shape[0] < a.shape[1]:
-                a = a.T
-            arrs.append(a)
-        if len(arrs) == 0:
-            return np.empty((0, 0, 0))
-        # 에피소드 간 길이 다르면 최소 길이에 맞춰 자르기
-        min_len = min(a.shape[0] for a in arrs)
-        feat_dim = min(a.shape[1] for a in arrs)
-        arrs = [a[:min_len, :feat_dim] for a in arrs]
-        return np.stack(arrs, axis=0)  # (episodes, steps, features)
-    d = np.asarray(d)
-    if d.ndim == 3:
-        # (episodes, features, steps) → (episodes, steps, features)
-        if d.shape[1] < d.shape[2]:
-            return np.transpose(d, (0, 2, 1))
-        return d
-    if d.ndim == 2:
-        return d[None, ...]
-    return np.empty((0, 0, 0))
-# ----------------------------------
+# 공통 시간축 T 설정: X는 (T+1), U/R/d는 (T)
+T = max(0, min(Tu, Tr, Td, Tx - 1))
 
-# Train 데이터
-X_tr = np.asarray(train_env.observations)
-U_tr = squeeze_last_if_one(train_env.actions)
-R_tr = np.asarray(train_env.rewards)
-d_tr = stack_disturbances(train_env)
+# T가 0이면(데이터가 비어 있으면) 플롯은 건너뛰고 저장만
+if T <= 0:
+    print("[WARN] No timesteps to plot (T<=0). Skipping plots.")
+    PLOT = False
 
-# Eval 데이터 (없을 수 있음 → 조건부)
-def has_episodes(env):
-    obs = np.asarray(env.observations, dtype=object)
-    return obs.size > 0
 
-if has_episodes(eval_env):
-    X_ev = np.asarray(eval_env.observations)
-    U_ev = squeeze_last_if_one(eval_env.actions)
-    R_ev = np.asarray(eval_env.rewards)
-    d_ev = stack_disturbances(eval_env)
-else:
-    X_ev = U_ev = R_ev = d_ev = None
+# 정렬된 3D/2D 텐서로 변환
+X = _stack_ragged(X_tr, target_len=T + 1)   # (episodes, T+1, nx?) or (episodes, T+1)
+U = _stack_ragged(U_tr, target_len=T)       # (episodes, T,   nu?) or (episodes, T)
+R = _stack_ragged(R_tr, target_len=T)       # (episodes, T)
+d = _stack_ragged(d_tr, target_len=T)       # (episodes, T,   nd?) or (episodes, T)
+
+# 🔧 차원 보정: 2D로 떨어졌으면 마지막 축을 추가해 3D로 맞춤
+if X.ndim == 2: X = X[:, :, np.newaxis]
+if U.ndim == 2: U = U[:, :, np.newaxis]
+if d.ndim == 2: d = d[:, :, np.newaxis]
+
+
+# (선택) 방어적 체크
+# assert X.ndim == 3 and U.ndim == 3 and d.ndim == 3, f"Shapes not 3D: {X.shape}, {U.shape}, {d.shape}"
+# assert X.shape[1] == U.shape[1] + 1 == d.shape[1] + 1 == R.shape[1] + 1, "Time lengths misaligned"
 
 # ---------- 플롯 ----------
 if PLOT:
-    plot_greenhouse(X_tr, U_tr, d_tr, R_tr, TD)
+    # ※ ragged 원본(X_tr 등)이 아니라, 정렬된 텐서(X/U/R/d)를 넘깁니다.
+    plot_greenhouse(X, U, d, R, TD)
 # -------------------------
 
 # ---------- 저장 ----------
@@ -309,10 +391,10 @@ if STORE_DATA:
         pickle.dump(
             {
                 "name": identifier_tr,
-                "X": X_tr,
-                "U": U_tr,
-                "R": R_tr,
-                "d": d_tr,
+                "X": X,           # 정렬된 텐서 저장
+                "U": U,
+                "R": R,
+                "d": d,
                 "TD": TD,
                 "param_dict": param_dict,
             },
@@ -325,4 +407,3 @@ if STORE_DATA:
                 file,
             )
 # -------------------------
-
