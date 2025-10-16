@@ -253,7 +253,7 @@ class MpcRunner:
 
         env_stub = SimpleGreenhouseEnv(
             nx=len(STATE_KEYS),
-            nu=4,
+            nu=3,
             ny=len(STATE_KEYS),
             nd=len(STATE_KEYS),
             dt=float(CONTROL_PERIOD_SEC)
@@ -381,24 +381,21 @@ class MpcRunner:
         return cmd
 
     def _fallback_policy(self, x: list) -> list:
-        """MPC 실패 시 간단한 P제어 대체(안전모드). 프로젝트에 맞게 수정."""
-        # 목표값(중간치)
-        setpoints = [
-            sum(Y_BOUNDS[k]) / 2.0 for k in STATE_KEYS
-        ]
-        kp = [0.1, 0.1, 0.05, 0.05]
+        """MPC 실패 시 간단한 P제어 대체(안전모드)."""
+        setpoints = [sum(Y_BOUNDS[k]) / 2.0 for k in STATE_KEYS]
+        kp = [0.1, 0.1, 0.05]  # ★ 3채널만
         u = []
-        for i in range(min(len(setpoints), len(x), len(kp))):
+        for i in range(min(len(kp), 3)):  # ★ 0..2까지만
             u.append(kp[i] * (setpoints[i] - float(x[i])))
-        # 액추에이터 4채널 가정
-        while len(u) < 4:
+        while len(u) < 3:
             u.append(0.0)
         return u
+
         
     def _build_params_for_solve(self, x):
         import numpy as np
         nx = ny = nd = 4
-        nu = 4  # 액추에이터 4채널과 일치
+        nu = 3  # 액추에이터 4채널과 일치
         N  = int(getattr(self.mpc, "prediction_horizon", 24))
     
         P = {}
@@ -459,22 +456,26 @@ class MpcRunner:
     def step(self, x):
         try:
             params = self._build_params_for_solve(x)
-            u = self.mpc.solve(params)  # 딕셔너리 한 방에
+            u = self.mpc.solve(params)  # (heater, humidifier, co2_valve) 3채널
             u = np.asarray(u, float).reshape(-1).tolist()
         except Exception as e:
             print(f"[MPC] Solve failed, fallback policy used: {e}")
-            u = self._fallback_policy(x)
+            u = self._fallback_policy(x)  # 길이 3
+    
+        # ★ LED는 임시 규칙 기반: PAR(조도) 낮으면 켬
+        PAR = float(x[3])
+        led_cmd = 0.2 if PAR < 200.0 else 0.0
     
         cmd = {
             "heater":     float(u[0]) if len(u)>0 else 0.0,
             "humidifier": float(u[1]) if len(u)>1 else 0.0,
             "co2_valve":  float(u[2]) if len(u)>2 else 0.0,
-            "led":        float(u[3]) if len(u)>3 else 0.0,
+            "led":        led_cmd,  # ★ MPC 바깥에서 결정
         }
-        # 안전용 클램핑(내부 제약이 정상 동작해도 보호용으로 유지 권장)
         for k in cmd:
             cmd[k] = 0.0 if cmd[k] < 0.0 else 1.0 if cmd[k] > 1.0 else cmd[k]
         return cmd
+
 
 
 # =========================
