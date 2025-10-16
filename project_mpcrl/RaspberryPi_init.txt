@@ -171,80 +171,8 @@ pip install "mpcrl==1.2.1rc4"  || pip install --no-deps "mpcrl==1.2.1rc4"
 
 
 
-[SIM] PUB combined: {"temp": 24.02, "hum": 74.33, "co2": 482.3, "light": 561.8, "ts": 1760613791}
-[SIM] PUB combined: {"temp": 22.15, "hum": 75.48, "co2": 893.9, "light": 272.8, "ts": 1760613796}
-[SIM] PUB combined: {"temp": 21.83, "hum": 55.59, "co2": 447.6, "light": 588.4, "ts": 1760613801}
-[SIM] PUB combined: {"temp": 24.14, "hum": 74.78, "co2": 495.9, "light": 449.2, "ts": 1760613806}
-[SIM] PUB combined: {"temp": 22.35, "hum": 58.61, "co2": 842.6, "light": 574.7, "ts": 1760613811}
-[SIM] PUB combined: {"temp": 24.23, "hum": 78.68, "co2": 846.7, "light": 485.9, "ts": 1760613816}
-[SIM] PUB combined: {"temp": 23.42, "hum": 73.92, "co2": 623.7, "light": 585.1, "ts": 1760613821}
-[SIM] PUB combined: {"temp": 24.56, "hum": 73.75, "co2": 537.4, "light": 190.2, "ts": 1760613826}
-[SIM] PUB combined: {"temp": 26.74, "hum": 52.13, "co2": 858.1, "light": 454.4, "ts": 1760613831}
-[SIM] PUB combined: {"temp": 21.13, "hum": 54.63, "co2": 659.6, "light": 253.3, "ts": 1760613836}
-[SIM] PUB combined: {"temp": 26.5, "hum": 61.77, "co2": 898.4, "light": 296.4, "ts": 1760613841}
-[SIM] PUB combined: {"temp": 20.34, "hum": 74.04, "co2": 758.6, "light": 477.9, "ts": 1760613846}
-[SIM] PUB combined: {"temp": 24.17, "hum": 64.86, "co2": 508.5, "light": 284.1, "ts": 1760613851}
-[SIM] PUB combined: {"temp": 20.6, "hum": 69.11, "co2": 659.3, "light": 529.2, "ts": 1760613856}
-[SIM] PUB combined: {"temp": 24.42, "hum": 72.28, "co2": 564.1, "light": 534.5, "ts": 1760613861}
-[SIM] PUB combined: {"temp": 21.69, "hum": 65.19, "co2": 796.5, "light": 588.8, "ts": 1760613866}
-[SIM] PUB combined: {"temp": 23.61, "hum": 54.78, "co2": 682.4, "light": 351.9, "ts": 1760613871}
-[SIM] PUB combined: {"temp": 20.6, "hum": 77.63, "co2": 909.2, "light": 550.0, "ts": 1760613876}
-[SIM] PUB combined: {"temp": 23.27, "hum": 77.49, "co2": 643.0, "light": 290.3, "ts": 1760613881}
-[SIM] PUB combined: {"temp": 22.17, "hum": 64.97, "co2": 891.4, "light": 445.8, "ts": 1760613886}
-[SIM] PUB combined: {"temp": 22.65, "hum": 72.13, "co2": 550.7, "light": 381.1, "ts": 1760613891}
-[SIM] PUB combined: {"temp": 19.38, "hum": 75.89, "co2": 883.7, "light": 394.6, "ts": 1760613896}
-[SIM] PUB combined: {"temp": 23.15, "hum": 78.32, "co2": 436.6, "light": 214.5, "ts": 1760613901}
-[SIM] PUB combined: {"temp": 25.39, "hum": 67.92, "co2": 687.7, "light": 323.7, "ts": 1760613906}
-[SIM] PUB combined: {"temp": 24.36, "hum": 60.74, "co2": 459.5, "light": 335.1, "ts": 1760613911}
-[SIM] PUB combined: {"temp": 24.09, "hum": 66.2, "co2": 530.1, "light": 343.0, "ts": 1760613916}
-[SIM] PUB combined: {"temp": 20.82, "hum": 69.68, "co2": 428.2, "light": 103.6, "ts": 1760613921}
-
-
-
-
-
-
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 4.339999999999998, 'ts': 1760612577}
-[MON] farm/greenhouse/actuators/led  ←  {'value': -8.01, 'ts': 1760612577}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': -0.577, 'ts': 1760612637}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': -0.4340000000000004, 'ts': 1760612637}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 3.319999999999999, 'ts': 1760612637}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 2.3849999999999993, 'ts': 1760612637}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': -0.509, 'ts': 1760612692}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.1729999999999997, 'ts': 1760612692}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': -7.855000000000001, 'ts': 1760612692}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 8.11, 'ts': 1760612692}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': 0.0, 'ts': 1760613421}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.0, 'ts': 1760613421}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 0.0, 'ts': 1760613421}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 1.0, 'ts': 1760613421}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': 0.15500000000000008, 'ts': 1760613702}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.0, 'ts': 1760613702}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 0.0, 'ts': 1760613702}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 1.0, 'ts': 1760613702}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': 0.0, 'ts': 1760613762}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.0, 'ts': 1760613762}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 0.5550000000000012, 'ts': 1760613762}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 1.0, 'ts': 1760613762}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': 0.0, 'ts': 1760613822}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.0, 'ts': 1760613822}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 1.0, 'ts': 1760613822}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 0.0, 'ts': 1760613822}
-[MON] farm/greenhouse/actuators/heater  ←  {'value': 0.0, 'ts': 1760613882}
-[MON] farm/greenhouse/actuators/humidifier  ←  {'value': 0.0, 'ts': 1760613882}
-[MON] farm/greenhouse/actuators/co2_valve  ←  {'value': 0.35000000000000003, 'ts': 1760613882}
-[MON] farm/greenhouse/actuators/led  ←  {'value': 1.0, 'ts': 1760613882}
-
-
-
-
-
-
-
-
-
 (.venv311) rasp@raspberrypi:~/checkjin/mpcrl/project_mpcrl $ python mpc_mqtt.py 
-/home/rasp/checkjin/mpcrl/project_mpcrl/mpc_mqtt.py:422: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+/home/rasp/checkjin/mpcrl/project_mpcrl/mpc_mqtt.py:499: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
   client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv5)
 [MPC] Init start
 [MQTT] Connected reasonCode=Success
@@ -286,12 +214,8 @@ pip install "mpcrl==1.2.1rc4"  || pip install --no-deps "mpcrl==1.2.1rc4"
 [MPC][WARN] cannot set 'p_27' via known APIs; skipped.
 [MPC] 초기화 완료
 [Main] 제어 루프 시작
-[Main] Waiting sensor values... required keys: ['temp', 'hum', 'co2', 'light']
-[Main] Waiting sensor values... required keys: ['temp', 'hum', 'co2', 'light']
-[MPC] Solve failed, fallback policy used: solve input formats all failed: Trying to solve the NLP with unspecified parameters: y_min_13, y_min_24, p_7, y_max_15, y_max_11, y_max_7, p_9, p_19, y_min_5, p_13, y_min_0, y_max_20, y_max_21, y_max_4, y_min_16, y_max_6, c_dy, y_min_4, y_max_9, y_max_12, y_min_6, c_y, y_max_0, y_min_3, y_min_17, y_max_8, y_min_18, y_max_1, oub, p_21, y_max_13, y_max_19, y_min_23, p_15, p_14, d, p_8, y_max_5, y_min_2, y_max_18, y_min_19, w, y_max_14, p_27, p_1, y_min_10, p_6, p_4, p_3, p_12, p_26, x_0, y_max_17, p_11, y_min_1, p_18, y_fin, y_min_9, y_min_12, olb, p_22, y_min_8, p_5, V0, p_16, p_2, p_20, y_min_20, y_min_21, p_0, y_min_11, y_min_15, y_max_24, p_24, c_u, y_max_16, y_max_23, p_17, y_min_14, p_10, p_25, y_max_10, y_max_22, y_max_3, y_min_22, y_min_7, y_max_2, p_23.
-[Main] x=[19.45, 76.62, 655.4, 177.1] → cmd={'heater': 0.15500000000000008, 'humidifier': 0.0, 'co2_valve': 0.0, 'led': 1.0}
-[MPC] Solve failed, fallback policy used: solve input formats all failed: Trying to solve the NLP with unspecified parameters: y_min_13, y_min_24, p_7, y_max_15, y_max_11, y_max_7, p_9, p_19, y_min_5, p_13, y_min_0, y_max_20, y_max_21, y_max_4, y_min_16, y_max_6, c_dy, y_min_4, y_max_9, y_max_12, y_min_6, c_y, y_max_0, y_min_3, y_min_17, y_max_8, y_min_18, y_max_1, oub, p_21, y_max_13, y_max_19, y_min_23, p_15, p_14, d, p_8, y_max_5, y_min_2, y_max_18, y_min_19, w, y_max_14, p_27, p_1, y_min_10, p_6, p_4, p_3, p_12, p_26, x_0, y_max_17, p_11, y_min_1, p_18, y_fin, y_min_9, y_min_12, olb, p_22, y_min_8, p_5, V0, p_16, p_2, p_20, y_min_20, y_min_21, p_0, y_min_11, y_min_15, y_max_24, p_24, c_u, y_max_16, y_max_23, p_17, y_min_14, p_10, p_25, y_max_10, y_max_22, y_max_3, y_min_22, y_min_7, y_max_2, p_23.
-[Main] x=[25.22, 71.38, 638.9, 185.8] → cmd={'heater': 0.0, 'humidifier': 0.0, 'co2_valve': 0.5550000000000012, 'led': 1.0}
-[MPC] Solve failed, fallback policy used: solve input formats all failed: Trying to solve the NLP with unspecified parameters: y_min_13, y_min_24, p_7, y_max_15, y_max_11, y_max_7, p_9, p_19, y_min_5, p_13, y_min_0, y_max_20, y_max_21, y_max_4, y_min_16, y_max_6, c_dy, y_min_4, y_max_9, y_max_12, y_min_6, c_y, y_max_0, y_min_3, y_min_17, y_max_8, y_min_18, y_max_1, oub, p_21, y_max_13, y_max_19, y_min_23, p_15, p_14, d, p_8, y_max_5, y_min_2, y_max_18, y_min_19, w, y_max_14, p_27, p_1, y_min_10, p_6, p_4, p_3, p_12, p_26, x_0, y_max_17, p_11, y_min_1, p_18, y_fin, y_min_9, y_min_12, olb, p_22, y_min_8, p_5, V0, p_16, p_2, p_20, y_min_20, y_min_21, p_0, y_min_11, y_min_15, y_max_24, p_24, c_u, y_max_16, y_max_23, p_17, y_min_14, p_10, p_25, y_max_10, y_max_22, y_max_3, y_min_22, y_min_7, y_max_2, p_23.
-[Main] x=[23.42, 73.92, 623.7, 585.1] → cmd={'heater': 0.0, 'humidifier': 0.0, 'co2_valve': 1.0, 'led': 0.0}
+[MPC] Solve failed, fallback policy used: .../casadi/core/sx_instantiator.cpp:457: Sparsities of v and vdef must match. Got v: 1x1 and vdef: 4x1.
+[Main] x=[23.67, 53.17, 632.5, 345.3] → cmd={'heater': 0.0, 'humidifier': 1.0, 'co2_valve': 0.875, 'led': 0.0}
+[MPC] Solve failed, fallback policy used: .../casadi/core/sx_instantiator.cpp:457: Sparsities of v and vdef must match. Got v: 1x1 and vdef: 4x1.
+[Main] x=[21.89, 72.23, 486.3, 447.3] → cmd={'heater': 0.0, 'humidifier': 0.0, 'co2_valve': 1.0, 'led': 0.0}
 
