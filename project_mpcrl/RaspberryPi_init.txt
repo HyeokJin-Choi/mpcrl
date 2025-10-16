@@ -141,3 +141,29 @@ EOF
 
 python -u q_learning_greenhouse.py | tee run.log
 
+
+
+
+게다가 llvmlite의 Python 3.11 지원 자체는 0.40부터 있지만(기능적으로는 가능), 라즈베리파이 32-bit용 사전 빌드 휠이 없기 때문에 현실적으로 실패
+cd ~/checkjin
+rm -rf .venv311
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -U pip setuptools wheel
+
+sudo apt update
+sudo apt install -y cmake build-essential pkg-config \
+  libjpeg-dev zlib1g-dev libtiff5-dev libfreetype6-dev \
+  liblcms2-dev libwebp-dev libopenjp2-7-dev libpng-dev libxcb1-dev
+
+pip install --only-binary=:all: "pillow>=10,<12"
+
+# 4-1 기본셋
+pip install "numpy==1.26.4" "scipy==1.13.1" "matplotlib==3.9.0" "gymnasium==0.29.1"
+
+# 4-2 casadi (휠 있음)
+pip install "casadi==3.6.5"
+
+# 4-3 csnlp, mpcrl 설치 시 numba가 따라오면 --no-deps로 설치
+pip install "csnlp==1.5.11rc4" || pip install --no-deps "csnlp==1.5.11rc4"
+pip install "mpcrl==1.2.1rc4"  || pip install --no-deps "mpcrl==1.2.1rc4"
