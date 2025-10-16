@@ -1,5 +1,5 @@
 import json
-from mpcs.learning import LearningMpc
+from learning import LearningMpc
 import time
 
 # ✅ 최종 학습 파라미터 로드
@@ -25,3 +25,4 @@ while True:
     u = mpc.solve(x)            # MPC 최적 제어 계산
     control_actuators(u)        # 액추에이터로 전달
     time.sleep(60)              # 1분 단위 제어 주기
+
