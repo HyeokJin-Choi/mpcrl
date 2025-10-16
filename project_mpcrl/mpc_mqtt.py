@@ -395,30 +395,20 @@ class MpcRunner:
     def _build_params_for_solve(self, x):
         import numpy as np
     
-        # 차원/수평선
         nx = ny = nd = 4
-        nu = 3                      # 지금은 3채널 MPC
+        nu = 3
         N  = int(getattr(self.mpc, "prediction_horizon", 24))
     
         P = {}
-    
-        # 0) 초기 상태 x_0
         P["x_0"] = np.asarray(x, dtype=float).reshape(nx, 1)
+        P["d"]   = np.zeros((nd, N), dtype=float)
     
-        # 1) 외란 d : 일단 0으로 (nd, N)
-        P["d"] = np.zeros((nd, N), dtype=float)
-    
-        # 2) 출력 제약 y_min_k / y_max_k
-        #    ※ 구현에 따라 k=0..N 또는 k=0..N-1를 요구할 수 있음.
-        #    지금 오류 리스트에 y_max_24까지 보이므로 k=0..N 포함로 맞춥니다.
         y_min_vec = np.array([Y_BOUNDS[k][0] for k in STATE_KEYS], dtype=float).reshape(ny, 1)
         y_max_vec = np.array([Y_BOUNDS[k][1] for k in STATE_KEYS], dtype=float).reshape(ny, 1)
-    
-        for k in range(N + 1):  # ★ 0..N 포함
+        for k in range(N + 1):
             P[f"y_min_{k}"] = y_min_vec
             P[f"y_max_{k}"] = y_max_vec
     
-        # 3) 비용/가중/목표 등 θ에 들어있는 벡터형 파라미터 주입 헬퍼
         def put_vec(name, length):
             if name not in self.theta:
                 return
@@ -426,33 +416,38 @@ class MpcRunner:
             if arr.shape[0] == 1:
                 arr = np.full((length, 1), float(arr[0, 0]))  # 스칼라 → 길이 맞춤
             elif arr.shape[0] != length:
-                # 길이가 다르면 resize
                 arr = np.resize(arr, (length, 1))
             P[name] = arr
     
-        # 4) 출력 관련(차원 = ny) — 필요할 때만 들어갑니다
+        # 출력 관련(4×1), 입력 관련(3×1)
         put_vec("c_y",   ny)
         put_vec("c_dy",  ny)
         put_vec("V0",    ny)
         put_vec("y_fin", ny)
         put_vec("w",     ny)
-    
-        # 5) 입력 관련(차원 = nu = 3)
         put_vec("c_u",   nu)
-        put_vec("olb",   nu)   # 사용하지 않으면 무시됨
+        put_vec("olb",   nu)
         put_vec("oub",   nu)
     
-        # 6) 동역학 파라미터: 'p_0'.. 개별 키로 넣기 (오류 메시지가 p_0 같은 개별 키를 요구)
+        # ☆ 여기만 교체: p_0..p_n 을 4×1로 브로드캐스트해서 넣기
         i = 0
         while True:
             key = f"p_{i}"
             if key not in self.theta:
                 break
-            # 개별 파라미터는 (1,1) 스칼라 형태로
-            P[key] = np.array([[float(self.theta[key])]], dtype=float)
+            sval = float(self.theta[key])
+            P[key] = np.full((ny, 1), sval, dtype=float)   # ★ 4×1로 맞춤
             i += 1
     
+        # (선택) 디버그: 각 파라미터 shape 확인
+        for k, v in P.items():
+            try:
+                print(f"[DBG] param {k}: {np.asarray(v).shape}")
+            except Exception:
+                pass
+    
         return P
+
 
 
     
