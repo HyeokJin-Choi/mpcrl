@@ -407,15 +407,38 @@ class MpcRunner:
         P["oub"] = np.ones((nu,1), float)     # 1
     
         # 비용/가중치/말기비용 (θ에 있으면 shape 맞춰 주입)
-        def put_vec(name, length):
-            if name in self.theta:
-                P[name] = np.asarray(self.theta[name], float).reshape(length,1)
-        put_vec("c_y", ny)
-        put_vec("c_dy", ny)
-        put_vec("c_u", nu)
-        put_vec("w", ny)
-        put_vec("V0", ny)
-        put_vec("y_fin", ny)
+        def put_vec(name, length, to="ny"):
+            # to: "ny"→(4,1), "nu"→(3,1) 같은 힌트 용도(선택)
+            if name not in self.theta:
+                return
+            v = self.theta[name]
+            arr = np.asarray(v, dtype=float)
+        
+            if arr.ndim == 0:
+                # 스칼라면 length 길이로 복제
+                arr = np.full((length, 1), float(arr))
+            else:
+                arr = arr.reshape(-1, 1)
+                if arr.shape[0] != length:
+                    if arr.shape[0] == 1:
+                        # [x] 하나만 있으면 length로 복제
+                        arr = np.full((length, 1), float(arr[0, 0] if arr.ndim == 2 else arr[0]))
+                    else:
+                        # 길이가 다르면 안전하게 resize(패딩/자름)
+                        arr = np.resize(arr, (length, 1))
+            params[name] = arr
+        
+        put_vec("c_y",   ny)  # (4,1)
+        put_vec("c_dy",  ny)  # (4,1)
+        put_vec("V0",    ny)  # (4,1)
+        put_vec("y_fin", ny)  # (4,1)
+        put_vec("w",     ny)  # (4,1)
+        
+        put_vec("c_u",   nu)  # (3,1)  ← 입력 가중치
+        # olb/oub가 theta에도 있을 수 있으니 있으면 덮어쓰게:
+        put_vec("olb",   nu)  # (3,1)
+        put_vec("oub",   nu)  # (3,1)
+
     
         # 동역학 파라미터
         i = 0
