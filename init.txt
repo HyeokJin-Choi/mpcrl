@@ -168,3 +168,4 @@ python -u q_learning_greenhouse.py | tee run.log
 nohup python -u q_learning_greenhouse.py > run.log 2>&1 &
 disown
 
+tail -f run.log
